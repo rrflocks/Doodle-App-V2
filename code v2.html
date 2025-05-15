@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doodle App</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            background-color: #f0f0f0;
+            height: 100vh;
+            overflow: hidden; /* Prevent scrollbars */
+        }
+
+        .app-container {
+            display: flex;
+            flex-direction: column; /* Stack UI bar and doodle area vertically */
+            width: 90%;
+            max-width: 600px;
+            height: 95vh;
+            max-height: 800px;
+            background-color: #333; /* Dark background */
+            border: 5px solid #b8860b; /* Golden border */
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+            color: white;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+
+        .ui-controls-bar {
+            display: flex;
+            flex-direction: column; /* Stack color palette above size/clear controls */
+            align-items: center; /* Center items horizontally */
+            padding: 10px 0;
+            border-bottom: 2px solid #b8860b;
+            margin-bottom: 15px;
+        }
+
+        .color-palette {
+            display: flex;
+            flex-wrap: wrap; /* Allow colors to wrap to next line if needed */
+            justify-content: center; /* Center colors horizontally */
+            margin-bottom: 10px; /* Space between colors and other controls */
+        }
+
+        .color-button {
+            width: 30px; /* Slightly smaller for top bar */
+            height: 30px;
+            border: 2px solid #777;
+            border-radius: 50%; /* Circular buttons */
+            margin: 5px;
+            cursor: pointer;
+            transition: transform 0.1s ease, border-color 0.1s ease;
+            flex-shrink: 0;
+        }
+
+        .color-button:hover {
+            transform: scale(1.1);
+            border-color: #fff;
+        }
+
+        .color-button.active {
+            border: 3px solid #00ff00;
+            box-shadow: 0 0 5px #00ff00;
+        }
+
+        .other-controls { /* Renamed from 'controls' to avoid conflict with canvas controls idea */
+            display: flex;
+            justify-content: space-around; /* Space out size and clear */
+            align-items: center;
+            width: 100%;
+            max-width: 300px; /* Constrain width of these controls */
+        }
+
+        .other-controls label {
+            margin-right: 5px;
+            font-size: 0.9em;
+        }
+        .other-controls input[type="range"] {
+            width: 100px;
+        }
+        .other-controls button {
+            padding: 5px 10px;
+            font-size: 0.9em;
+            background-color: #555;
+            color: white;
+            border: 1px solid #777;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .other-controls button:hover {
+            background-color: #666;
+        }
+
+        .doodle-area-wrapper { /* New wrapper for centering */
+            flex-grow: 1; /* Takes remaining vertical space */
+            display: flex;
+            justify-content: center; /* Center canvas horizontally */
+            align-items: center;   /* Center canvas vertically */
+            width: 100%;
+            min-height: 0; /* Important for flex children */
+            position: relative; /* For placeholder */
+        }
+
+        #doodleCanvas {
+            background-color: #1e1e1e;
+            cursor: crosshair;
+            border: 2px solid #b8860b;
+            touch-action: none;
+            display: block;
+            max-width: 100%;   /* Ensure canvas doesn't overflow its centered wrapper */
+            max-height: 100%;  /* Ensure canvas doesn't overflow its centered wrapper */
+        }
+        
+        .doodle-placeholder {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #777;
+            font-size: 1.5em;
+            pointer-events: none;
+            display: none;
+            text-align: center;
+        }
+        
+        #doodleCanvas:not(.has-drawing) + .doodle-placeholder {
+            display: block;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <div class="ui-controls-bar">
+            <div class="color-palette">
+                <!-- Color buttons will be added by JavaScript -->
+            </div>
+            <div class="other-controls">
+                <div>
+                    <label for="lineWidth">Size:</label>
+                    <input type="range" id="lineWidth" min="1" max="50" value="5">
+                </div>
+                <button id="clearCanvas">Clear</button>
+            </div>
+        </div>
+
+        <div class="doodle-area-wrapper">
+            <canvas id="doodleCanvas"></canvas>
+            <div class="doodle-placeholder">Doodle area</div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const canvas = document.getElementById('doodleCanvas');
+            const doodleAreaWrapper = document.querySelector('.doodle-area-wrapper'); // Changed from doodle-area-container
+            const ctx = canvas.getContext('2d');
+            const colorPalette = document.querySelector('.color-palette');
+            const lineWidthSlider = document.getElementById('lineWidth');
+            const clearButton = document.getElementById('clearCanvas');
+
+            let isDrawing = false;
+            let lastX = 0;
+            let lastY = 0;
+            let currentColor = '#FFFFFF';
+            let currentLineWidth = 5;
+            let hasDrawing = false;
+
+            const availableColors = [
+                '#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF',
+                '#FFA500', '#800080', '#008000', '#A52A2A', '#FFFFFF', '#000000'
+            ];
+
+            function initializeColorPalette() {
+                availableColors.forEach((color) => {
+                    const button = document.createElement('div');
+                    button.classList.add('color-button');
+                    button.style.backgroundColor = color;
+                    button.dataset.color = color;
+                    if (color === '#FFFFFF') {
+                        button.classList.add('active');
+                    }
+                    button.addEventListener('click', () => {
+                        currentColor = color;
+                        document.querySelectorAll('.color-button').forEach(btn => btn.classList.remove('active'));
+                        button.classList.add('active');
+                    });
+                    colorPalette.appendChild(button);
+                });
+            }
+            
+            function setCanvasSize() {
+                // Canvas should fit within the doodleAreaWrapper
+                const wrapperStyle = getComputedStyle(doodleAreaWrapper);
+                const wrapperPaddingLeft = parseFloat(wrapperStyle.paddingLeft) || 0;
+                const wrapperPaddingRight = parseFloat(wrapperStyle.paddingRight) || 0;
+                const wrapperPaddingTop = parseFloat(wrapperStyle.paddingTop) || 0;
+                const wrapperPaddingBottom = parseFloat(wrapperStyle.paddingBottom) || 0;
+
+                // The doodleAreaWrapper is a flex item that grows and centers its content.
+                // The canvas should try to fill this wrapper, respecting its own border.
+                const availableWidth = doodleAreaWrapper.clientWidth - wrapperPaddingLeft - wrapperPaddingRight;
+                const availableHeight = doodleAreaWrapper.clientHeight - wrapperPaddingTop - wrapperPaddingBottom;
+
+                canvas.width = Math.max(50, availableWidth - 4); // Subtract border width (2px on each side)
+                canvas.height = Math.max(50, availableHeight - 4); // Subtract border width
+
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                
+                clearCanvasContent(false); 
+            }
+
+
+            function startDrawing(e) {
+                isDrawing = true;
+                const { x, y } = getMousePos(e);
+                [lastX, lastY] = [x, y];
+                ctx.beginPath();
+                ctx.moveTo(lastX, lastY);
+            }
+
+            function draw(e) {
+                if (!isDrawing) return;
+                const { x, y } = getMousePos(e);
+                
+                ctx.lineTo(x, y);
+                ctx.strokeStyle = currentColor;
+                ctx.lineWidth = currentLineWidth;
+                ctx.stroke();
+                
+                [lastX, lastY] = [x, y];
+                if (!hasDrawing) {
+                    hasDrawing = true;
+                    updateCanvasState();
+                }
+            }
+
+            function stopDrawing() {
+                if (isDrawing) {
+                    ctx.closePath();
+                    isDrawing = false;
+                }
+            }
+            
+            function getMousePos(e) {
+                const rect = canvas.getBoundingClientRect();
+                let clientX, clientY;
+                if (e.touches && e.touches.length > 0) {
+                    clientX = e.touches[0].clientX;
+                    clientY = e.touches[0].clientY;
+                } else {
+                    clientX = e.clientX;
+                    clientY = e.clientY;
+                }
+                return {
+                    x: clientX - rect.left,
+                    y: clientY - rect.top
+                };
+            }
+
+            function updateCanvasState() {
+                if (hasDrawing) {
+                    canvas.classList.add('has-drawing');
+                } else {
+                    canvas.classList.remove('has-drawing');
+                }
+                // Center placeholder relative to canvas parent (doodleAreaWrapper)
+                const placeholder = document.querySelector('.doodle-placeholder');
+                if (placeholder) {
+                    if(hasDrawing) {
+                        placeholder.style.display = 'none';
+                    } else {
+                        placeholder.style.display = 'block';
+                    }
+                }
+            }
+            
+            function clearCanvasContent(resetFlag = true) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                if (resetFlag) {
+                    hasDrawing = false;
+                }
+                updateCanvasState();
+            }
+
+            canvas.addEventListener('mousedown', startDrawing);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('mouseup', stopDrawing);
+            canvas.addEventListener('mouseout', stopDrawing);
+
+            canvas.addEventListener('touchstart', (e) => {
+                if (e.target === canvas) e.preventDefault();
+                startDrawing(e);
+            });
+            canvas.addEventListener('touchmove', (e) => {
+                if (e.target === canvas) e.preventDefault();
+                draw(e);
+            });
+            canvas.addEventListener('touchend', (e) => {
+                if (e.target === canvas) e.preventDefault();
+                stopDrawing();
+            });
+
+            lineWidthSlider.addEventListener('input', (e) => {
+                currentLineWidth = e.target.value;
+            });
+
+            clearButton.addEventListener('click', () => clearCanvasContent(true));
+            
+            initializeColorPalette();
+            
+            requestAnimationFrame(() => {
+                setCanvasSize(); 
+                updateCanvasState();
+            });
+            
+            window.addEventListener('resize', () => {
+                setCanvasSize();
+            });
+        });
+    </script>
+
+</body>
+</html>
