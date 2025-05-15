@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doodle App</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            background-color: #f0f0f0;
+            height: 100vh;
+            overflow: hidden; /* Prevent scrollbars if content overflows slightly */
+        }
+
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            width: 90%;
+            max-width: 600px;
+            height: 95vh;
+            max-height: 800px;
+            background-color: #333; /* Dark background as per sketch */
+            border: 5px solid #b8860b; /* Golden border */
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+            color: white;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+
+        .top-decoration {
+            text-align: center;
+            padding: 10px 0;
+            font-size: 1.5em;
+            color: #b8860b; /* Golden text */
+            letter-spacing: 5px;
+            border-bottom: 2px solid #b8860b;
+            margin-bottom: 10px;
+        }
+
+        .main-content {
+            display: flex;
+            flex-grow: 1; /* Takes remaining vertical space */
+            min-height: 0; /* Important for flex children to shrink if needed */
+        }
+
+        .color-palette {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px;
+            margin-right: 10px;
+            border-right: 2px solid #b8860b;
+        }
+
+        .color-button {
+            width: 40px;
+            height: 40px;
+            border: 2px solid #777;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: transform 0.1s ease;
+        }
+
+        .color-button:hover {
+            transform: scale(1.1);
+            border-color: #fff;
+        }
+
+        .color-button.active {
+            border: 3px solid #00ff00; /* Highlight active color */
+            box-shadow: 0 0 5px #00ff00;
+        }
+
+
+        .doodle-area-container {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 10px;
+            position: relative; /* For placeholder text */
+        }
+
+        #doodleCanvas {
+            background-color: #1e1e1e; /* Slightly lighter than main bg for contrast */
+            cursor: crosshair;
+            border: 2px solid #b8860b;
+            touch-action: none; /* Prevent scrolling on touch devices when drawing */
+        }
+        
+        .doodle-placeholder {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #777;
+            font-size: 1.5em;
+            pointer-events: none; /* So it doesn't interfere with drawing */
+            display: none; /* Hidden by default, shown if canvas is empty */
+        }
+        
+        #doodleCanvas:not(.has-drawing) + .doodle-placeholder {
+            display: block;
+        }
+
+
+        .action-button-container {
+            padding: 15px 0;
+            text-align: center;
+            border-top: 2px solid #b8860b;
+            margin-top: 10px;
+        }
+
+        .action-button {
+            padding: 10px 20px;
+            font-size: 1em;
+            background-color: #b8860b; /* Golden button */
+            color: #222;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .action-button:hover {
+            background-color: #daa520; /* Lighter gold on hover */
+        }
+
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px 10px; /* Reduced padding */
+            margin-bottom: 5px; /* Reduced margin */
+        }
+
+        .controls label {
+            margin-right: 5px;
+            font-size: 0.9em;
+        }
+        .controls input[type="range"] {
+            width: 80px;
+        }
+        .controls button {
+            padding: 5px 10px;
+            font-size: 0.9em;
+            background-color: #555;
+            color: white;
+            border: 1px solid #777;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .controls button:hover {
+            background-color: #666;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <div class="top-decoration">
+            DDOOO DOO
+        </div>
+
+        <div class="main-content">
+            <div class="color-palette">
+                <!-- Color buttons will be added by JavaScript -->
+                <!-- Example: <div class="color-button" style="background-color: red;" data-color="red"></div> -->
+            </div>
+
+            <div class="doodle-area-container">
+                 <div class="controls">
+                    <div>
+                        <label for="lineWidth">Size:</label>
+                        <input type="range" id="lineWidth" min="1" max="50" value="5">
+                    </div>
+                    <button id="clearCanvas">Clear</button>
+                </div>
+                <canvas id="doodleCanvas"></canvas>
+                <div class="doodle-placeholder">Doodle area</div>
+            </div>
+        </div>
+
+        <div class="action-button-container">
+            <button id="photorealisticBtn" class="action-button">Turn doodle into a photorealistic drawing</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const canvas = document.getElementById('doodleCanvas');
+            const doodleAreaContainer = document.querySelector('.doodle-area-container');
+            const ctx = canvas.getContext('2d');
+            const photorealisticBtn = document.getElementById('photorealisticBtn');
+            const colorPalette = document.querySelector('.color-palette');
+            const lineWidthSlider = document.getElementById('lineWidth');
+            const clearButton = document.getElementById('clearCanvas');
+
+            let isDrawing = false;
+            let lastX = 0;
+            let lastY = 0;
+            let currentColor = '#FFFFFF'; // Default color: white
+            let currentLineWidth = 5;
+            let hasDrawing = false;
+
+            const availableColors = [
+                '#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF',
+                '#FFA500', '#800080', '#008000', '#A52A2A', '#FFFFFF', '#000000'
+            ];
+
+            function initializeColorPalette() {
+                availableColors.forEach((color, index) => {
+                    const button = document.createElement('div');
+                    button.classList.add('color-button');
+                    button.style.backgroundColor = color;
+                    button.dataset.color = color;
+                    if (index === availableColors.indexOf('#FFFFFF')) { // Set white as default active
+                        button.classList.add('active');
+                    }
+                    button.addEventListener('click', () => {
+                        currentColor = color;
+                        document.querySelectorAll('.color-button').forEach(btn => btn.classList.remove('active'));
+                        button.classList.add('active');
+                    });
+                    colorPalette.appendChild(button);
+                });
+            }
+            
+            function setCanvasSize() {
+                // Adjust canvas size to fit its container, considering padding and controls
+                const controlsHeight = document.querySelector('.controls').offsetHeight;
+                const containerPadding = 20; // Approximate padding of doodle-area-container
+                
+                const availableWidth = doodleAreaContainer.clientWidth - (2 * parseFloat(getComputedStyle(doodleAreaContainer).paddingLeft));
+                const availableHeight = doodleAreaContainer.clientHeight - controlsHeight - (2 * parseFloat(getComputedStyle(doodleAreaContainer).paddingTop)) - (2 * parseFloat(getComputedStyle(doodleAreaContainer).paddingBottom)) - 10 /* some buffer */;
+
+                canvas.width = availableWidth > 50 ? availableWidth : 50; // Minimum width
+                canvas.height = availableHeight > 50 ? availableHeight : 50; // Minimum height
+
+                // Re-apply line cap and join after resizing
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                
+                // If there was drawing, it's cleared on resize. This is a browser behavior.
+                // You might want to redraw content if needed, but for a simple doodle app,
+                // clearing on resize is often acceptable.
+                // For this example, we'll just reset the hasDrawing flag.
+                // If you want to preserve, you'd need to store drawing commands or image data.
+                if (hasDrawing) {
+                    // To preserve drawing, you'd need to save the canvas state before resize
+                    // and redraw it after. This is complex. For simplicity, we'll just clear.
+                    console.log("Canvas resized. Drawing would be cleared by browser. Re-enable hasDrawing if you implement redraw.");
+                    // hasDrawing = false; // Or implement redraw
+                    // updateCanvasState(); 
+                    clearCanvasContent(false); // Clear content but don't reset hasDrawing flag yet if we were to redraw
+                }
+            }
+
+
+            function startDrawing(e) {
+                isDrawing = true;
+                const { x, y } = getMousePos(e);
+                [lastX, lastY] = [x, y];
+                ctx.beginPath(); // Start a new path
+                ctx.moveTo(lastX, lastY);
+            }
+
+            function draw(e) {
+                if (!isDrawing) return;
+                const { x, y } = getMousePos(e);
+                
+                ctx.lineTo(x, y);
+                ctx.strokeStyle = currentColor;
+                ctx.lineWidth = currentLineWidth;
+                ctx.stroke();
+                
+                [lastX, lastY] = [x, y];
+                if (!hasDrawing) {
+                    hasDrawing = true;
+                    updateCanvasState();
+                }
+            }
+
+            function stopDrawing() {
+                if (isDrawing) {
+                    ctx.closePath(); // Close the current path
+                    isDrawing = false;
+                }
+            }
+            
+            function getMousePos(e) {
+                const rect = canvas.getBoundingClientRect();
+                let clientX, clientY;
+                if (e.touches && e.touches.length > 0) {
+                    clientX = e.touches[0].clientX;
+                    clientY = e.touches[0].clientY;
+                } else {
+                    clientX = e.clientX;
+                    clientY = e.clientY;
+                }
+                return {
+                    x: clientX - rect.left,
+                    y: clientY - rect.top
+                };
+            }
+
+            function updateCanvasState() {
+                if (hasDrawing) {
+                    canvas.classList.add('has-drawing');
+                } else {
+                    canvas.classList.remove('has-drawing');
+                }
+            }
+            
+            function clearCanvasContent(resetFlag = true) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                if (resetFlag) {
+                    hasDrawing = false;
+                }
+                updateCanvasState();
+            }
+
+            // Event Listeners
+            canvas.addEventListener('mousedown', startDrawing);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('mouseup', stopDrawing);
+            canvas.addEventListener('mouseout', stopDrawing); // Stop drawing if mouse leaves canvas
+
+            // Touch events
+            canvas.addEventListener('touchstart', (e) => {
+                e.preventDefault(); // Prevent scrolling
+                startDrawing(e);
+            });
+            canvas.addEventListener('touchmove', (e) => {
+                e.preventDefault(); // Prevent scrolling
+                draw(e);
+            });
+            canvas.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                stopDrawing();
+            });
+
+
+            lineWidthSlider.addEventListener('input', (e) => {
+                currentLineWidth = e.target.value;
+            });
+
+            clearButton.addEventListener('click', () => clearCanvasContent(true));
+            
+            photorealisticBtn.addEventListener('click', () => {
+                if (!hasDrawing) {
+                    alert('Please doodle something first!');
+                    return;
+                }
+                alert('Feature: "Turn doodle into a photorealistic drawing"\n\nThis is a concept. Implementing this would require advanced AI image generation models, which are beyond the scope of this simple client-side demo.');
+                // If you had an API:
+                // const imageDataUrl = canvas.toDataURL('image/png');
+                // console.log('Sending to AI for photorealistic conversion (conceptual):', imageDataUrl);
+                // Call your AI API here
+            });
+            
+            // Initial setup
+            initializeColorPalette();
+            setCanvasSize(); // Set initial size
+            updateCanvasState(); // Set initial placeholder visibility
+
+            // Resize listener
+            window.addEventListener('resize', () => {
+                // Debounce or throttle resize if performance is an issue
+                setCanvasSize();
+                // Note: Canvas content is typically cleared on resize.
+                // If you need to preserve it, you'd store the drawing operations or image data
+                // and redraw after resizing. For this simple app, we'll let it clear.
+                clearCanvasContent(false); // Clear canvas but don't reset hasDrawing if we plan to redraw (not implemented here)
+            });
+        });
+    </script>
+
+</body>
+</html>
